@@ -1,24 +1,20 @@
-import os
 from gmail_tools import search_emails, summarize_emails
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, ToolMessage
-from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import List
 from langchain_core.messages import BaseMessage
+from gemini_model import llm
+
 
 class AgentState(BaseModel):
     messages: List[BaseMessage]
 
-load_dotenv()
-
-
+# Step 1: Define tools
+tools = [search_emails, summarize_emails]
 
 # Step 2: Setup Gemini model with tools
-tools = [search_emails, summarize_emails]
-os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0).bind_tools(tools)
+llm = llm.bind_tools(tools)
 
 
 TOOLS = {
@@ -41,6 +37,8 @@ def tool_node(state):
     tool_call = last_message.tool_calls[0]
   
     tool_name = tool_call["name"]
+
+    print(f"Tool call: {tool_name}, args: {tool_call['args']}")
     
     args = tool_call["args"]
     
