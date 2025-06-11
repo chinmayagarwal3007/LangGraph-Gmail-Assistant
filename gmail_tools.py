@@ -1,31 +1,12 @@
-import os
-from typing import List, Dict, Optional
-from googleapiclient.discovery import build
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from datetime import datetime, timedelta
+from typing import List, Dict
 from langchain.tools import tool
 from gemini_model import llm
 import base64
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
+from google_services import get_gmail_service, get_calendar_service
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-TOKEN_PATH = 'token.json'
-CREDENTIALS_PATH = 'credentials.json'
 
-def get_gmail_service():
-    creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-            creds = flow.run_console()
-        with open(TOKEN_PATH, 'w') as token_file:
-            token_file.write(creds.to_json())
-    return build('gmail', 'v1', credentials=creds)
 
 def extract_email_body(payload):
     """Recursively extracts plain text email body from Gmail payload."""
@@ -74,7 +55,7 @@ def search_emails(query: str) -> List[Dict]:
             'id': msg['id'],
             'subject': subject,
             'sender': sender,
-            'body': body,
+            'body': snippet,
             'internalDate': int(msg_detail.get('internalDate', 0))
         })
 
@@ -94,7 +75,7 @@ def search_emails(query: str) -> List[Dict]:
 # Tool 2: Summarize Emails
 @tool
 def summarize_emails(emails: List[Dict]) -> str:
-    """Summarizes a list of emails using the LLM. Only considers top 2 emails for brevity."""
+    """Summarizes a list of emails using the LLM."""
     if not emails:
         return "No emails to summarize."
 
@@ -112,3 +93,44 @@ def summarize_emails(emails: List[Dict]) -> str:
     response = llm.invoke([HumanMessage(content=summary_prompt)])
 
     return response.content.strip()
+
+@tool
+def create_calendar_event(title: str, date: str, time: str, description: str = ""):
+    """Creates a Google Calendar event."""
+    service = get_calendar_service()
+    event = {
+        'summary': title,
+        'description': description,
+        'start': {
+            'dateTime': f"{date}T{time}:00",
+            'timeZone': 'Asia/Kolkata',
+        },
+        'end': {
+            'dateTime': f"{date}T{(int(time[:2])+1):02}:{time[3:]}:00",
+            'timeZone': 'Asia/Kolkata',
+        },
+    }
+    created_event = service.events().insert(calendarId='primary', body=event).execute()
+    return f"Event created: {created_event.get('htmlLink')}"
+
+
+@tool
+def get_upcoming_events(days_ahead: int = 7) -> List[Dict]:
+    """Fetches upcoming calendar events in the next N days."""
+    service = get_calendar_service()
+    now = datetime.utcnow().isoformat() + 'Z'
+    future = (datetime.utcnow() + timedelta(days=days_ahead)).isoformat() + 'Z'
+    events_result = service.events().list(
+        calendarId='primary',
+        timeMin=now,
+        timeMax=future,
+        singleEvents=True,
+        orderBy='startTime'
+    ).execute()
+    events = events_result.get('items', [])
+    return [{
+        'summary': e.get('summary'),
+        'start': e.get('start', {}).get('dateTime'),
+        'end': e.get('end', {}).get('dateTime'),
+        'description': e.get('description')
+    } for e in events]

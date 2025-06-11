@@ -1,4 +1,4 @@
-from gmail_tools import search_emails, summarize_emails
+from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, ToolMessage
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ class AgentState(BaseModel):
     messages: List[BaseMessage]
 
 # Step 1: Define tools
-tools = [search_emails, summarize_emails]
+tools = [search_emails, summarize_emails, create_calendar_event, get_upcoming_events]
 
 # Step 2: Setup Gemini model with tools
 llm = llm.bind_tools(tools)
@@ -20,6 +20,8 @@ llm = llm.bind_tools(tools)
 TOOLS = {
     "search_emails": (search_emails, ["query"]),
     "summarize_emails": (summarize_emails, ["emails"]),
+    "get_upcoming_events": (get_upcoming_events, ["days_ahead"]),
+    "create_calendar_event": (create_calendar_event, ["event_details"]),
 }
 
 # Step 3: LLM node
@@ -50,8 +52,10 @@ def tool_node(state):
                 raise ValueError(f"Unknown tool: {tool_name}")
 
             tool_func, arg_keys = TOOLS[tool_name]
-           
-            result = tool.invoke({arg_keys[0]:args[arg_keys[0]]})
+            if len(args) != 0:
+                result = tool.invoke({arg_keys[0]:args[arg_keys[0]]})
+            else:
+                result = tool.invoke({})
 
            
             break
@@ -82,6 +86,6 @@ app = graph.compile()
 
 # Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="Summarize emails from google")]})
+    result = app.invoke({"messages": [HumanMessage(content="what are my upcoming meetings in next 15 days")]})
     for msg in result["messages"]:
         print(msg.content)
