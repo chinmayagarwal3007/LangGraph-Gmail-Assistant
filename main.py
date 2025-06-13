@@ -1,4 +1,4 @@
-from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events
+from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, ToolMessage
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ class AgentState(BaseModel):
     messages: List[BaseMessage]
 
 # Step 1: Define tools
-tools = [search_emails, summarize_emails, create_calendar_event, get_upcoming_events]
+tools = [search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request]
 
 # Step 2: Setup Gemini model with tools
 llm = llm.bind_tools(tools)
@@ -22,6 +22,7 @@ TOOLS = {
     "summarize_emails": (summarize_emails, ["emails"]),
     "get_upcoming_events": (get_upcoming_events, ["days_ahead"]),
     "create_calendar_event": (create_calendar_event, ["event_details"]),
+    "parse_meeting_request": (parse_meeting_request, ["prompt"])
 }
 
 # Step 3: LLM node
@@ -86,6 +87,6 @@ app = graph.compile()
 
 # Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="what are my upcoming meetings in next 15 days")]})
+    result = app.invoke({"messages": [HumanMessage(content="Create a meeting titled Project Kickoff with the john on 14 july 2025 at 10 AM for 1 hour.")]})
     for msg in result["messages"]:
         print(msg.content)

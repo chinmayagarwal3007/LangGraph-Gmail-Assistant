@@ -1,11 +1,17 @@
 from datetime import datetime, timedelta
-from typing import List, Dict
+import json
+from typing import List, Dict, Optional, TypedDict
 from langchain.tools import tool
+from pydantic import BaseModel, Field
 from gemini_model import llm
 import base64
 from langchain_core.messages import HumanMessage
 from google_services import get_gmail_service, get_calendar_service
-
+#from langchain.output_parsers import JsonOutputParser
+from langchain.output_parsers import StructuredOutputParser
+from langchain.prompts import PromptTemplate
+import dateparser
+from langchain.output_parsers import PydanticOutputParser
 
 
 def extract_email_body(payload):
@@ -74,39 +80,40 @@ def search_emails(query: str) -> List[Dict]:
 
 # Tool 2: Summarize Emails
 @tool
-def summarize_emails(emails: List[Dict]) -> str:
-    """Summarizes a list of emails using the LLM."""
-    if not emails:
-        return "No emails to summarize."
+def summarize_emails(emails: List[Dict]) -> Dict:
+    """Summarizes emails and extracts potential calendar events (title, date, time, etc.)."""
+    prompt = """Summarize these emails. Also, extract any meeting or deadline information as structured events.
+Return a JSON with two keys:
+1. summary: plain summary of emails
+2. events: list of events with keys [title, date, time, description]
 
-    # Limit to 2 emails to control tokens
-    top_emails = emails[:2]
+Emails:\n
+"""
+    for email in emails:
+        prompt += f"Subject: {email['subject']}\nSender: {email['sender']}\nSnippet: {email.get('body', email.get('snippet'))}\n\n"
 
-    # Prepare formatted text
-    email_text = "\n\n".join(
-        f"Subject: {email.get('subject', '')}\nBody: {email.get('body', '')}" 
-        for email in top_emails
-    )
+    response = llm.invoke([HumanMessage(content=prompt)])
+    return response
 
-    # Ask LLM to summarize
-    summary_prompt = f"Summarize the following emails:\n\n{email_text}"
-    response = llm.invoke([HumanMessage(content=summary_prompt)])
-
-    return response.content.strip()
+class EventDetails(TypedDict):
+    title: str
+    date: str
+    time: str
+    description: Optional[str]
 
 @tool
-def create_calendar_event(title: str, date: str, time: str, description: str = ""):
+def create_calendar_event(event_details: EventDetails):
     """Creates a Google Calendar event."""
     service = get_calendar_service()
     event = {
-        'summary': title,
-        'description': description,
+        'summary': event_details["title"],
+        'description': event_details["description"],
         'start': {
-            'dateTime': f"{date}T{time}:00",
+            'dateTime': f"{event_details["date"]}T{event_details["time"]}:00",
             'timeZone': 'Asia/Kolkata',
         },
         'end': {
-            'dateTime': f"{date}T{(int(time[:2])+1):02}:{time[3:]}:00",
+            'dateTime': f"{event_details["date"]}T{(int(event_details["time"][:2])+1):02}:{event_details["time"][3:]}:00",
             'timeZone': 'Asia/Kolkata',
         },
     }
@@ -134,3 +141,64 @@ def get_upcoming_events(days_ahead: int = 7) -> List[Dict]:
         'end': e.get('end', {}).get('dateTime'),
         'description': e.get('description')
     } for e in events]
+
+
+class MeetingRequest(BaseModel):
+    """Data model for a meeting request."""
+    title: str = Field(..., description="The subject or title of the meeting")
+    datetime_text: str = Field(..., description="The natural language representation of the date and time, e.g., 'tomorrow at 3pm' or 'next Tuesday morning'")
+    participants: List[str] = Field(..., description="A list of participant email addresses mentioned in the request")
+
+# 2. Corrected tool logic using PydanticOutputParser
+@tool
+def parse_meeting_request(prompt: str) -> Dict:
+    """Parses a meeting request from user input into structured data."""
+    print(f"Parsing meeting request from prompt: '{prompt}'")
+
+    # Use PydanticOutputParser and connect it to your model
+    parser = PydanticOutputParser(pydantic_object=MeetingRequest)
+
+    format_instructions = parser.get_format_instructions()
+
+    prompt_template = PromptTemplate.from_template("""
+You are an expert assistant that extracts meeting details from user input.
+
+Extract the following information:
+- title: The subject of the meeting.
+- datetime_text: The verbatim natural language for the date and time (e.g., "tomorrow at 3pm").
+- participants: A list of all email addresses mentioned.
+
+If any information is missing, use a sensible placeholder. For example, if no title is mentioned, use "Meeting". If no participants are mentioned, use an empty list [].
+
+Respond only with the JSON object as specified by the format instructions below.
+
+FORMAT INSTRUCTIONS:
+{format_instructions}
+
+USER INPUT:
+{user_input}
+""")
+
+    full_prompt = prompt_template.format(
+        user_input=prompt,
+        format_instructions=format_instructions
+    )
+
+    # The LLM call remains the same
+    llm_response = llm.invoke([HumanMessage(content=full_prompt)])
+    
+    # The parser now directly returns an instance of your MeetingRequest class
+    parsed_request: MeetingRequest = parser.parse(llm_response.content)
+
+    # Parse the natural language date into a standardized format
+    # Set the 'PREFER_DATES_FROM' setting to 'future' to avoid ambiguity
+    # e.g., "Wednesday" will be next Wednesday, not last Wednesday.
+    parsed_datetime = dateparser.parse(parsed_request.datetime_text, settings={'PREFER_DATES_FROM': 'future'})
+    iso_datetime = parsed_datetime.isoformat() if parsed_datetime else None
+
+    # Return the final, structured dictionary
+    return {
+        "title": parsed_request.title,
+        "datetime": iso_datetime,
+        "participants": parsed_request.participants
+    }
