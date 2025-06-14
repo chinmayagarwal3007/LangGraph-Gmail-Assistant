@@ -87,6 +87,10 @@ app = graph.compile()
 
 # Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="Create a meeting titled Project Kickoff with the john on 14 july 2025 at 10 AM for 1 hour.")]})
+    result = app.invoke({"messages": [HumanMessage(content="summarize emails from postman")]})
     for msg in result["messages"]:
         print(msg.content)
+
+
+# Set up a meeting with Alex on Tuesday, June 18th 2025 at 3 pm to discuss the Q3 planning.
+#what are my upcoming meetings?

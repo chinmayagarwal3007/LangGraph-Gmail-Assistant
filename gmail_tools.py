@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 import json
+import requests
+import pickle
 from typing import List, Dict, Optional, TypedDict
 from langchain.tools import tool
 from pydantic import BaseModel, Field
@@ -7,8 +9,6 @@ from gemini_model import llm
 import base64
 from langchain_core.messages import HumanMessage
 from google_services import get_gmail_service, get_calendar_service
-#from langchain.output_parsers import JsonOutputParser
-from langchain.output_parsers import StructuredOutputParser
 from langchain.prompts import PromptTemplate
 import dateparser
 from langchain.output_parsers import PydanticOutputParser
@@ -30,6 +30,18 @@ def extract_email_body(payload):
             return decoded_bytes.decode('utf-8', errors='ignore')
 
     return None
+
+def load_access_token_from_pickle(pickle_file='token_calendar.pickle'):
+    with open(pickle_file, 'rb') as token:
+        creds = pickle.load(token)
+    return creds.token  # This is your access token
+
+class EventDetails(TypedDict):
+    title: str
+    start_datetime: str
+    end_datetime: str
+    description: Optional[str]
+
 
 
 # Tool 1: Search Emails
@@ -95,30 +107,37 @@ Emails:\n
     response = llm.invoke([HumanMessage(content=prompt)])
     return response
 
-class EventDetails(TypedDict):
-    title: str
-    date: str
-    time: str
-    description: Optional[str]
 
 @tool
-def create_calendar_event(event_details: EventDetails):
+def create_calendar_event(event_details:EventDetails, token_pickle_path='token_calendar.pickle'):
     """Creates a Google Calendar event."""
-    service = get_calendar_service()
-    event = {
-        'summary': event_details["title"],
-        'description': event_details["description"],
+    access_token = load_access_token_from_pickle(token_pickle_path)
+
+    url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    event_payload = {
+        'summary': event_details['title'],
+        'description': event_details['description'],
         'start': {
-            'dateTime': f"{event_details["date"]}T{event_details["time"]}:00",
-            'timeZone': 'Asia/Kolkata',
+            'dateTime': event_details['start_datetime'],
+            'timeZone': 'Asia/Kolkata'
         },
         'end': {
-            'dateTime': f"{event_details["date"]}T{(int(event_details["time"][:2])+1):02}:{event_details["time"][3:]}:00",
-            'timeZone': 'Asia/Kolkata',
-        },
+            'dateTime': event_details['end_datetime'],
+            'timeZone': 'Asia/Kolkata'
+        }
     }
-    created_event = service.events().insert(calendarId='primary', body=event).execute()
-    return f"Event created: {created_event.get('htmlLink')}"
+    print(f"Creating event with payload: {json.dumps(event_payload, indent=2)}")
+    response = requests.post(url, headers=headers, json=event_payload)
+
+    if response.status_code in (200, 201):
+        event = response.json()
+        return f"Event created: {event.get('htmlLink')}"
+    else:
+        return f"Failed: {response.status_code}\n{response.text}"
 
 
 @tool

@@ -28,7 +28,6 @@ def get_gmail_service():
 def get_calendar_service():
     SCOPES = ['https://www.googleapis.com/auth/calendar']
     creds = None
-
     if os.path.exists('token_calendar.pickle'):
         with open('token_calendar.pickle', 'rb') as token:
             creds = pickle.load(token)
