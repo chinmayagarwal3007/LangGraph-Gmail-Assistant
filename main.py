@@ -1,4 +1,4 @@
-from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request
+from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request, send_email, draft_email_from_prompt
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, ToolMessage
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ class AgentState(BaseModel):
     messages: List[BaseMessage]
 
 # Step 1: Define tools
-tools = [search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request]
+tools = [search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request, draft_email_from_prompt, send_email]
 
 # Step 2: Setup Gemini model with tools
 llm = llm.bind_tools(tools)
@@ -22,12 +22,13 @@ TOOLS = {
     "summarize_emails": (summarize_emails, ["emails"]),
     "get_upcoming_events": (get_upcoming_events, ["days_ahead"]),
     "create_calendar_event": (create_calendar_event, ["event_details"]),
-    "parse_meeting_request": (parse_meeting_request, ["prompt"])
+    "parse_meeting_request": (parse_meeting_request, ["prompt"]),
+    "send_email": (send_email, ["email_draft"]),
+    "draft_email_from_prompt": (draft_email_from_prompt, ["prompt"]),
 }
 
 # Step 3: LLM node
 def agent_node(state):
-   
     messages =  state.messages
     response = llm.invoke(messages)
     return {"messages": messages + [response]}
@@ -87,10 +88,12 @@ app = graph.compile()
 
 # Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="summarize emails from postman")]})
+    result = app.invoke({"messages": [HumanMessage(content="Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm. Also my name is John")]})
     for msg in result["messages"]:
         print(msg.content)
 
 
 # Set up a meeting with Alex on Tuesday, June 18th 2025 at 3 pm to discuss the Q3 planning.
 #what are my upcoming meetings?
+#summarize emails from postman
+#Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm.

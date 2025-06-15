@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from email.mime.text import MIMEText
 import json
 import requests
 import pickle
@@ -12,6 +13,7 @@ from google_services import get_gmail_service, get_calendar_service
 from langchain.prompts import PromptTemplate
 import dateparser
 from langchain.output_parsers import PydanticOutputParser
+
 
 
 def extract_email_body(payload):
@@ -42,6 +44,16 @@ class EventDetails(TypedDict):
     end_datetime: str
     description: Optional[str]
 
+class EmailDraft(TypedDict):
+    to: str
+    subject: str 
+    body: str
+
+class MeetingRequest(BaseModel):
+    """Data model for a meeting request."""
+    title: str = Field(..., description="The subject or title of the meeting")
+    datetime_text: str = Field(..., description="The natural language representation of the date and time, e.g., 'tomorrow at 3pm' or 'next Tuesday morning'")
+    participants: List[str] = Field(..., description="A list of participant email addresses mentioned in the request")
 
 
 # Tool 1: Search Emails
@@ -162,11 +174,6 @@ def get_upcoming_events(days_ahead: int = 7) -> List[Dict]:
     } for e in events]
 
 
-class MeetingRequest(BaseModel):
-    """Data model for a meeting request."""
-    title: str = Field(..., description="The subject or title of the meeting")
-    datetime_text: str = Field(..., description="The natural language representation of the date and time, e.g., 'tomorrow at 3pm' or 'next Tuesday morning'")
-    participants: List[str] = Field(..., description="A list of participant email addresses mentioned in the request")
 
 # 2. Corrected tool logic using PydanticOutputParser
 @tool
@@ -221,3 +228,37 @@ USER INPUT:
         "datetime": iso_datetime,
         "participants": parsed_request.participants
     }
+
+@tool
+def send_email(email_draft: EmailDraft) -> str:
+    """Sends an email using Gmail API."""
+    service = get_gmail_service()
+    message = MIMEText(email_draft['body'])
+    message['to'] = email_draft['to']
+    message['subject'] = email_draft['subject']
+
+    raw_message = {'raw': base64.urlsafe_b64encode(message.as_bytes()).decode()}
+    try:
+        service.users().messages().send(userId="me", body=raw_message).execute()
+        return f"Email sent to {email_draft['to']} with subject '{email_draft['subject']}'"
+        
+    except Exception as e:
+        return f"Failed to send email: {str(e)}"
+    
+@tool
+def draft_email_from_prompt(prompt: str) -> Dict[str, str]:
+    """Generates a draft email (subject and body) from user intent."""
+    template = PromptTemplate.from_template("""
+    You are an AI writing assistant. Based on this instruction, write a professional email.
+
+    Instruction: {prompt}
+
+    Respond in this JSON format:
+    {{
+      "subject": "...",
+      "body": "..."
+    }}
+    """)
+
+    prompt = template.format(prompt=prompt)
+    return llm.invoke([HumanMessage(content=prompt)])

@@ -8,7 +8,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 
 def get_gmail_service():
-    SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+    SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
     TOKEN_PATH = 'token.json'
     CREDENTIALS_PATH = 'credentials.json'
     creds = None

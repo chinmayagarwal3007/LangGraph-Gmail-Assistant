@@ -27,4 +27,19 @@ Later: Connect to Google Calendar API
 Track last_x_messages, past tool results, etc. in state
 
 Let LLM access prior context like:
-“Find all flight emails you told me about earlier” -->
+“Find all flight emails you told me about earlier” 
+
+
+
+
+
+
+things to fix 
+
+Send email 
+
+ask if i have meeting with someone
+
+
+
+-->
