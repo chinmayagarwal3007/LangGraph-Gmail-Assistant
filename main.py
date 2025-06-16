@@ -1,10 +1,12 @@
-from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request, send_email, draft_email_from_prompt
+from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request, draft_email_from_prompt, send_email
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, ToolMessage
 from pydantic import BaseModel
 from typing import List
 from langchain_core.messages import BaseMessage
 from gemini_model import llm
+from langchain.prompts import PromptTemplate
+import uuid
 
 
 class AgentState(BaseModel):
@@ -12,7 +14,6 @@ class AgentState(BaseModel):
 
 # Step 1: Define tools
 tools = [search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request, draft_email_from_prompt, send_email]
-
 # Step 2: Setup Gemini model with tools
 llm = llm.bind_tools(tools)
 
@@ -71,19 +72,81 @@ def tool_node(state):
     return {"messages": new_messages}
     #return {"messages": state.messages + [ToolMessage(content=str(result), tool_call_id="tool-1")]}
 
-# Routing logic
+#Routing logic
 def should_use_tool(state):
-  
     last =  state.messages[-1]
+    try:
+        if last.tool_calls[0]['name'] == "send_email":
+            return "should_send"
+    except:
+        pass
     return "tools" if hasattr(last, "tool_calls") and last.tool_calls else "end"
+
+def should_send(state):
+    last = state.messages[-1].tool_calls[0]["args"]["email_draft"]
+
+    subject = last["subject"]
+    body = last["body"]
+    to = last["to"]
+    print("-------------------------------------------------\n")
+    email_draft = f"subject: {subject}\n\nbody:\n{body}"
+    user_input = input(
+        f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n\nUser: "
+    )
+    email_review_prompt = PromptTemplate.from_template(
+        """
+Here is the email draft:
+{email_draft}
+I asked the user if it's okay to send this email.
+
+User's response:
+{user_input}
+
+Based on the user's response, do one of the following:
+
+1. If the user has agreed to send the email as is, respond with:
+**Yes**
+
+2. If the user has suggested changes, respond with a string in the following format:
+**"Make the following changes -> [summary of changes suggested by the user] to the following email:\n{email_draft}"**
+"""
+    )
+    full_prompt = email_review_prompt.format(
+        email_draft=email_draft, user_input=user_input
+    )
+    response = llm.invoke([HumanMessage(content=full_prompt)])
+    random_id = uuid.uuid4()
+    print(f"------------------------Response from Gemini: {response.content.strip().lower()}")
+    if response.content.strip().lower() == "**yes**":
+        print("--------------------------------------------Sending email...")
+        result = send_email.invoke({"email_draft": {
+            "to": to,
+            "subject": subject,
+            "body": body
+        }})    
+    else:
+        result = draft_email_from_prompt.invoke({"prompt": response.content})
+    new_messages = state.messages + [
+        ToolMessage(
+            tool_call_id=random_id, # Use a random ID for the tool call
+            content=str(result)
+            )
+        ]
+
+    return {"messages": new_messages}
+    print("-------------------------------------------------\n")
+
+
 
 # Build LangGraph
 graph = StateGraph(AgentState)
 graph.add_node("agent", agent_node)
 graph.add_node("tools", tool_node)
+graph.add_node("should_send", should_send)
 graph.set_entry_point("agent")
 graph.add_conditional_edges("agent", should_use_tool)
 graph.add_edge("tools", "agent")
+graph.add_edge("should_send", "agent")
 app = graph.compile()
 
 # Test

@@ -240,8 +240,7 @@ def send_email(email_draft: EmailDraft) -> str:
     raw_message = {'raw': base64.urlsafe_b64encode(message.as_bytes()).decode()}
     try:
         service.users().messages().send(userId="me", body=raw_message).execute()
-        return f"Email sent to {email_draft['to']} with subject '{email_draft['subject']}'"
-        
+        return f"Email sent to {email_draft['to']} with subject '{email_draft['subject']}'"   
     except Exception as e:
         return f"Failed to send email: {str(e)}"
     
