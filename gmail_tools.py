@@ -129,7 +129,10 @@ Emails:\n
 def create_calendar_event(event_details:EventDetails, token_pickle_path='token_calendar.pickle'):
     """Creates a Google Calendar event."""
     access_token = load_access_token_from_pickle(token_pickle_path)
-
+    parsed_datetime_start = dateparser.parse(event_details['start_datetime'], settings={'PREFER_DATES_FROM': 'future'})
+    iso_datetime_start = parsed_datetime_start.isoformat() if parsed_datetime_start else None
+    parsed_datetime_end = dateparser.parse(event_details['end_datetime'], settings={'PREFER_DATES_FROM': 'future'})
+    iso_datetime_end = parsed_datetime_end.isoformat() if parsed_datetime_end else None
     url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
     headers = {
         'Authorization': f'Bearer {access_token}',
@@ -139,11 +142,11 @@ def create_calendar_event(event_details:EventDetails, token_pickle_path='token_c
         'summary': event_details['title'],
         'description': event_details['description'],
         'start': {
-            'dateTime': event_details['start_datetime'],
+            'dateTime': iso_datetime_start,
             'timeZone': 'Asia/Kolkata'
         },
         'end': {
-            'dateTime': event_details['end_datetime'],
+            'dateTime': iso_datetime_end,
             'timeZone': 'Asia/Kolkata'
         },
         'attendees': [{'email': email.strip()} for email in event_details.get('attendees', [])]
