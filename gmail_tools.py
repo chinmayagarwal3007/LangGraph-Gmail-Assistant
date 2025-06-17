@@ -41,6 +41,7 @@ def load_access_token_from_pickle(pickle_file='token_calendar.pickle'):
 class EventDetails(TypedDict):
     title: str
     start_datetime: str
+    attendees: List[str]
     end_datetime: str
     description: Optional[str]
 
@@ -48,6 +49,10 @@ class EmailDraft(TypedDict):
     to: str
     subject: str 
     body: str
+
+class UpcomingEvent(TypedDict):
+    days_ahead: Optional[int] = 7
+    filter_term: Optional[str] = None
 
 class MeetingRequest(BaseModel):
     """Data model for a meeting request."""
@@ -140,7 +145,8 @@ def create_calendar_event(event_details:EventDetails, token_pickle_path='token_c
         'end': {
             'dateTime': event_details['end_datetime'],
             'timeZone': 'Asia/Kolkata'
-        }
+        },
+        'attendees': [{'email': email.strip()} for email in event_details.get('attendees', [])]
     }
     print(f"Creating event with payload: {json.dumps(event_payload, indent=2)}")
     response = requests.post(url, headers=headers, json=event_payload)
@@ -153,11 +159,11 @@ def create_calendar_event(event_details:EventDetails, token_pickle_path='token_c
 
 
 @tool
-def get_upcoming_events(days_ahead: int = 7) -> List[Dict]:
+def get_upcoming_events(upcoming_event: UpcomingEvent) -> List[Dict]:
     """Fetches upcoming calendar events in the next N days."""
     service = get_calendar_service()
     now = datetime.utcnow().isoformat() + 'Z'
-    future = (datetime.utcnow() + timedelta(days=days_ahead)).isoformat() + 'Z'
+    future = (datetime.utcnow() + timedelta(days=upcoming_event["days_ahead"])).isoformat() + 'Z'
     events_result = service.events().list(
         calendarId='primary',
         timeMin=now,
@@ -166,12 +172,25 @@ def get_upcoming_events(days_ahead: int = 7) -> List[Dict]:
         orderBy='startTime'
     ).execute()
     events = events_result.get('items', [])
+    filtered_events = []
+    for e in events:
+        summary = e.get('summary', '').lower()
+        description = e.get('description', '').lower()
+        attendees = ', '.join([a.get('email', '') for a in e.get('attendees', [])]).lower()
+        
+        if upcoming_event["filter_term"]:
+            term = upcoming_event["filter_term"].lower()
+            if term in summary or term in description or term in attendees:
+                filtered_events.append(e)
+        else:
+            filtered_events.append(e)
+
     return [{
         'summary': e.get('summary'),
         'start': e.get('start', {}).get('dateTime'),
         'end': e.get('end', {}).get('dateTime'),
         'description': e.get('description')
-    } for e in events]
+    } for e in filtered_events] 
 
 
 

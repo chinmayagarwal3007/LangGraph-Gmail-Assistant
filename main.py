@@ -21,7 +21,7 @@ llm = llm.bind_tools(tools)
 TOOLS = {
     "search_emails": (search_emails, ["query"]),
     "summarize_emails": (summarize_emails, ["emails"]),
-    "get_upcoming_events": (get_upcoming_events, ["days_ahead"]),
+    "get_upcoming_events": (get_upcoming_events, ["upcoming_event"]),
     "create_calendar_event": (create_calendar_event, ["event_details"]),
     "parse_meeting_request": (parse_meeting_request, ["prompt"]),
     "send_email": (send_email, ["email_draft"]),
@@ -36,41 +36,33 @@ def agent_node(state):
 
 # Tool execution node
 def tool_node(state):
-   
     last_message =  state.messages[-1]
-   
-    tool_call = last_message.tool_calls[0]
-  
-    tool_name = tool_call["name"]
+    tool_calls = last_message.tool_calls
+    for tool_call in tool_calls:
+        tool_name = tool_call["name"]
+        print(f"Tool call: {tool_name}, args: {tool_call['args']}")
+        args = tool_call["args"]
+        for tool in tools:
+            if tool.name == tool_name:
+                # result = tool.invoke(args['query'])
+                if tool_name not in TOOLS:
+                    raise ValueError(f"Unknown tool: {tool_name}")
+                tool_func, arg_keys = TOOLS[tool_name]
+                if len(args) != 0:
+                    result = tool.invoke({arg_keys[0]:args[arg_keys[0]]})
+                else:
+                    result = tool.invoke({})
+                break
 
-    print(f"Tool call: {tool_name}, args: {tool_call['args']}")
-    
-    args = tool_call["args"]
-    
-    for tool in tools:
-        if tool.name == tool_name:
-           
-            # result = tool.invoke(args['query'])
-            if tool_name not in TOOLS:
-                raise ValueError(f"Unknown tool: {tool_name}")
+        new_messages = state.messages + [
+        ToolMessage(
+            tool_call_id=tool_call["id"],  # must match what Gemini gave
+            content=str(result)
+            )
+        ]
+        state.messages = new_messages
+    return {"messages": state.messages}
 
-            tool_func, arg_keys = TOOLS[tool_name]
-            if len(args) != 0:
-                result = tool.invoke({arg_keys[0]:args[arg_keys[0]]})
-            else:
-                result = tool.invoke({})
-
-           
-            break
-    new_messages = state.messages + [
-    ToolMessage(
-        tool_call_id=tool_call["id"],  # must match what Gemini gave
-        content=str(result)
-        )
-    ]
-
-    return {"messages": new_messages}
-    #return {"messages": state.messages + [ToolMessage(content=str(result), tool_call_id="tool-1")]}
 
 #Routing logic
 def should_use_tool(state):
@@ -88,7 +80,7 @@ def should_send(state):
     subject = last["subject"]
     body = last["body"]
     to = last["to"]
-    print("-------------------------------------------------\n")
+
     email_draft = f"subject: {subject}\n\nbody:\n{body}"
     user_input = input(
         f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n\nUser: "
@@ -116,7 +108,7 @@ Based on the user's response, do one of the following:
     )
     response = llm.invoke([HumanMessage(content=full_prompt)])
     random_id = uuid.uuid4()
-    print(f"------------------------Response from Gemini: {response.content.strip().lower()}")
+
     if response.content.strip().lower() == "**yes**":
         print("--------------------------------------------Sending email...")
         result = send_email.invoke({"email_draft": {
@@ -134,7 +126,6 @@ Based on the user's response, do one of the following:
         ]
 
     return {"messages": new_messages}
-    print("-------------------------------------------------\n")
 
 
 
@@ -146,17 +137,18 @@ graph.add_node("should_send", should_send)
 graph.set_entry_point("agent")
 graph.add_conditional_edges("agent", should_use_tool)
 graph.add_edge("tools", "agent")
-graph.add_edge("should_send", "agent")
+graph.add_edge("should_send", END)
 app = graph.compile()
 
 # Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm. Also my name is John")]})
+    result = app.invoke({"messages": [HumanMessage(content="Set up a reminder in my caledar for 19th june 2025 11 am for a medical appointment.")]})
     for msg in result["messages"]:
         print(msg.content)
 
 
-# Set up a meeting with Alex on Tuesday, June 18th 2025 at 3 pm to discuss the Q3 planning.
+#Set up a meeting with Alex on Tuesday, June 18th 2025 at 3 pm to discuss the Q3 planning.
 #what are my upcoming meetings?
 #summarize emails from postman
-#Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm.
+#Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm. Also my name is John
+#Set up a meeting with Chinmay(agarwalchinmay3007@gmail.com) on Wednesday, June 18th 2025 at 3 pm to discuss the Q3 planning.Also please send an email to Chinmay about the meeting. My name is John.
