@@ -1,6 +1,6 @@
 from gmail_tools import search_emails, summarize_emails, create_calendar_event, get_upcoming_events, parse_meeting_request, draft_email_from_prompt, send_email
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from pydantic import BaseModel
 from typing import List
 from langchain_core.messages import BaseMessage
@@ -76,73 +76,81 @@ def should_use_tool(state):
 
 def should_send(state):
     last = state.messages[-1].tool_calls[0]["args"]["email_draft"]
+    print("\n -------------------------------------------------------------\n")
+    print(last)
+    print("\n -------------------------------------------------------------\n")
 
     subject = last["subject"]
     body = last["body"]
     to = last["to"]
 
     email_draft = f"subject: {subject}\n\nbody:\n{body}"
-    user_input = input(
-        f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n\nUser: "
-    )
-    email_review_prompt = PromptTemplate.from_template(
-        """
-Here is the email draft:
-{email_draft}
-I asked the user if it's okay to send this email.
-
-User's response:
-{user_input}
-
-Based on the user's response, do one of the following:
-
-1. If the user has agreed to send the email as is, respond with:
-**Yes**
-
-2. If the user has suggested changes, respond with a string in the following format:
-**"Make the following changes -> [summary of changes suggested by the user] to the following email:\n{email_draft}"**
-"""
-    )
-    full_prompt = email_review_prompt.format(
-        email_draft=email_draft, user_input=user_input
-    )
-    response = llm.invoke([HumanMessage(content=full_prompt)])
-    random_id = uuid.uuid4()
-
-    if response.content.strip().lower() == "**yes**":
-        print("--------------------------------------------Sending email...")
-        result = send_email.invoke({"email_draft": {
-            "to": to,
-            "subject": subject,
-            "body": body
-        }})    
-    else:
-        result = draft_email_from_prompt.invoke({"prompt": response.content})
-    new_messages = state.messages + [
-        ToolMessage(
-            tool_call_id=random_id, # Use a random ID for the tool call
-            content=str(result)
-            )
-        ]
-
+    # user_input = input(
+    #     f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n\nUser: "
+    # )
+    final_message = f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n"
+    new_messages = state.messages + [AIMessage(content=final_message)]
     return {"messages": new_messages}
+#     email_review_prompt = PromptTemplate.from_template(
+#         """
+# Here is the email draft:
+# {email_draft}
+# I asked the user if it's okay to send this email.
+
+# User's response:
+# {user_input}
+
+# Based on the user's response, do one of the following:
+
+# 1. If the user has agreed to send the email as is, respond with:
+# **Yes**
+
+# 2. If the user has suggested changes, respond with a string in the following format:
+# **"Make the following changes -> [summary of changes suggested by the user] to the following email:\n{email_draft}"**
+# """
+#     )
+#     full_prompt = email_review_prompt.format(
+#         email_draft=email_draft, user_input=user_input
+#     )
+#     response = llm.invoke([HumanMessage(content=full_prompt)])
+#     random_id = uuid.uuid4()
+
+#     if response.content.strip().lower() == "**yes**":
+#         print("--------------------------------------------Sending email...")
+#         result = send_email.invoke({"email_draft": {
+#             "to": to,
+#             "subject": subject,
+#             "body": body
+#         }})    
+#     else:
+#         result = draft_email_from_prompt.invoke({"prompt": response.content})
+#     new_messages = state.messages + [
+#         ToolMessage(
+#             tool_call_id=random_id, # Use a random ID for the tool call
+#             content=str(result)
+#             )
+#         ]
+
+#     return {"messages": new_messages}
 
 
 
 # Build LangGraph
-graph = StateGraph(AgentState)
-graph.add_node("agent", agent_node)
-graph.add_node("tools", tool_node)
-graph.add_node("should_send", should_send)
-graph.set_entry_point("agent")
-graph.add_conditional_edges("agent", should_use_tool)
-graph.add_edge("tools", "agent")
-graph.add_edge("should_send", END)
-app = graph.compile()
+def build_graph():
+    graph = StateGraph(AgentState)
+    graph.add_node("agent", agent_node)
+    graph.add_node("tools", tool_node)
+    graph.add_node("should_send", should_send)
+    graph.set_entry_point("agent")
+    graph.add_conditional_edges("agent", should_use_tool)
+    graph.add_edge("tools", "agent")
+    graph.add_edge("should_send", END)
+    return graph.compile()
 
-# Test
+#Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm. Also my name is John")]})
+    app = build_graph()
+    result = app.invoke({"messages": [HumanMessage(content="Schedule a meeting with Chinmay(agarwalchinmay3007@gmail.com) to discuss ongoing updates of the project for tomorrow 3 pm.")]})
     for msg in result["messages"]:
         print(msg.content)
 
