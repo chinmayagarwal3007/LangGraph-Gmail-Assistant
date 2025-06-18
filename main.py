@@ -142,7 +142,7 @@ app = graph.compile()
 
 # Test
 if __name__ == "__main__":
-    result = app.invoke({"messages": [HumanMessage(content="Set up a reminder in my caledar for 19th june 2025 11 am for a medical appointment.")]})
+    result = app.invoke({"messages": [HumanMessage(content="Send an email to Chinmay(agarwalchinmay3007@gmail.com) about the Q3 planning meeting on June 18th 2025 at 3 pm. Also my name is John")]})
     for msg in result["messages"]:
         print(msg.content)
 
