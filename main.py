@@ -7,7 +7,7 @@ from langchain_core.messages import BaseMessage
 from gemini_model import llm
 from langchain.prompts import PromptTemplate
 import uuid
-
+import json
 
 class AgentState(BaseModel):
     messages: List[BaseMessage]
@@ -48,10 +48,14 @@ def tool_node(state):
                 if tool_name not in TOOLS:
                     raise ValueError(f"Unknown tool: {tool_name}")
                 tool_func, arg_keys = TOOLS[tool_name]
-                if len(args) != 0:
-                    result = tool.invoke({arg_keys[0]:args[arg_keys[0]]})
-                else:
-                    result = tool.invoke({})
+                try:
+                    if len(args) != 0:
+                        result = tool.invoke({arg_keys[0]:args[arg_keys[0]]})
+                    else:
+                        result = tool.invoke({})
+                except:
+                    new_messages = state.messages + [AIMessage(content="Can you please provide more details?")]
+                    return {"messages": state.messages}
                 break
 
         new_messages = state.messages + [
@@ -68,29 +72,39 @@ def tool_node(state):
 def should_use_tool(state):
     last =  state.messages[-1]
     try:
-        if last.tool_calls[0]['name'] == "send_email":
-            return "should_send"
+        if last.tool_calls[0]['name'] == "draft_email_from_prompt":
+            return "email_draft"
     except:
         pass
     return "tools" if hasattr(last, "tool_calls") and last.tool_calls else "end"
 
-def should_send(state):
-    last = state.messages[-1].tool_calls[0]["args"]["email_draft"]
-    print("\n -------------------------------------------------------------\n")
-    print(last)
-    print("\n -------------------------------------------------------------\n")
 
-    subject = last["subject"]
-    body = last["body"]
-    to = last["to"]
-
-    email_draft = f"subject: {subject}\n\nbody:\n{body}"
-    # user_input = input(
-    #     f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n\nUser: "
-    # )
+def email_draft_node(state):
+    last = state.messages[-1].tool_calls[0]["args"]["prompt"]
+    llm_result = draft_email_from_prompt.invoke({"prompt": last})
+    raw_email = json.loads(llm_result.content[7:-3].strip())
+    email_draft = f"subject: {raw_email["subject"]}\n\nbody:\n{raw_email["body"]}"
     final_message = f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n"
     new_messages = state.messages + [AIMessage(content=final_message)]
     return {"messages": new_messages}
+
+# def should_send(state):
+#     last = state.messages[-1].tool_calls[0]["args"]["email_draft"]
+#     print("\n -------------------------------------------------------------\n")
+#     print(last)
+#     print("\n -------------------------------------------------------------\n")
+
+#     subject = last["subject"]
+#     body = last["body"]
+#     to = last["to"]
+
+#     email_draft = f"subject: {subject}\n\nbody:\n{body}"
+#     # user_input = input(
+#     #     f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n\nUser: "
+#     # )
+#     final_message = f"Preparing to send email with \n\n{email_draft}\n\nDo you want to send this email or edit it?\n"
+#     new_messages = state.messages + [AIMessage(content=final_message)]
+#     return {"messages": new_messages}
 #     email_review_prompt = PromptTemplate.from_template(
 #         """
 # Here is the email draft:
@@ -140,17 +154,19 @@ def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node("agent", agent_node)
     graph.add_node("tools", tool_node)
-    graph.add_node("should_send", should_send)
+    #graph.add_node("should_send", should_send)
+    graph.add_node("email_draft", email_draft_node)
     graph.set_entry_point("agent")
     graph.add_conditional_edges("agent", should_use_tool)
     graph.add_edge("tools", "agent")
-    graph.add_edge("should_send", END)
+    #graph.add_edge("should_send", END)
+    graph.add_edge("email_draft", END)
     return graph.compile()
 
 #Test
 if __name__ == "__main__":
     app = build_graph()
-    result = app.invoke({"messages": [HumanMessage(content="Schedule a meeting with Chinmay(agarwalchinmay3007@gmail.com) to discuss ongoing updates of the project for tomorrow 3 pm.")]})
+    result = app.invoke({"messages": [HumanMessage(content="set up a remainder in my calendar for tomorrow 3 pm for doctor appointment")]})
     for msg in result["messages"]:
         print(msg.content)
 

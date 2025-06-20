@@ -77,13 +77,11 @@ for msg in messages:
 
 user_query = st.chat_input("Type your message here...")
 if user_query:
-    st.chat_message("user").write(user_query)
-    print("\n User query: ", user_query, "\n")
+    st.chat_message("user").write(user_query)   
     messages.append(HumanMessage(user_query))
-    print("\n Messages: ", messages, "\n")
     # Keep last 8 messages for context
     context_messages = messages[-8:]
-    print("\n Context messages: ", context_messages, "\n")
+
 
 
     # LangGraph state input
