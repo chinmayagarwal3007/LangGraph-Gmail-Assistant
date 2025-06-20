@@ -34,6 +34,15 @@ An intelligent assistant powered by LangGraph and Gemini that helps you manage y
 
 ---
 
+## 💻  Streamlit Frontend
+
+- Chat with the assistant using natural language
+- View summaries and email search results
+- Confirm or edit email drafts before sending
+- Visualize upcoming calendar events
+
+---
+
 ## 🧠 Powered by LangGraph
 
 LangGraph is used to model the assistant's logic as a dynamic state graph with branching for:
@@ -79,31 +88,51 @@ LangGraph is used to model the assistant's logic as a dynamic state graph with b
 
 ---
 
-## ✅ Completed
-- ✅ LLM-based tool orchestration via LangGraph
-- ✅ Gmail read, summarize, search
-- ✅ Google Calendar event creation
-- ✅ Human-in-the-loop for email send approval
-- ✅ Conditional filtering for calendar events
-- ✅ Date parsing using `dateparser`
+## 📦 Setup Instructions
 
----
-
-## 🔜 Up Next
-
-- ⏳ Frontend UI using Streamlit
-
----
-
-## 🧑‍💻 Run It
-
+### 1. 🧱 Install Dependencies
 ```bash
-# Activate environment
-source venv/bin/activate
-
-# Run app
-python main.py
+pip install -r requirements.txt
 ```
+
+
+### 2. 🔐 Setup Google Cloud Project & API Access
+
+#### Step-by-Step: Get `credentials.json`
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a **new project** (or reuse an existing one).
+3. Navigate to: **APIs & Services → Library**.
+4. Enable the following APIs:
+   - **Gmail API**
+   - **Google Calendar API**
+5. Go to: **APIs & Services → OAuth Consent Screen**.
+   - Choose **"External"** user type.
+   - Fill in the app info (you can use test data for development).
+   - Add test user(s) (e.g., your Gmail address).
+6. Go to: **APIs & Services → Credentials**.
+   - Click **"Create Credentials" → "OAuth Client ID"**
+   - Choose **App Type**: `Desktop App`
+7. After creation, download the `credentials.json` file.
+8. Place the `credentials.json` file in your project's root directory.
+
+
+### 3. 🔄 First Run (OAuth Token Setup)
+
+When you run the app for the first time:
+
+1. A Google authentication link will appear in the terminal.
+2. Open the link → Select your Gmail account → Allow the requested permissions.
+3. Tokens will be saved automatically:
+   - `token.json` → for Gmail
+   - `token_calendar.pickle` → for Google Calendar
+
+
+### 4. ▶️ Run the Streamlit App
+```bash
+streamlit run app.py
+```
+---
 
 Prompt examples:
 - "Summarize emails about flight bookings"
