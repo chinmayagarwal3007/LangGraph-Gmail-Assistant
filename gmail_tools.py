@@ -1,7 +1,5 @@
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
-import json
-import requests
 import pickle
 from typing import List, Dict, Optional, TypedDict
 from langchain.tools import tool
@@ -9,7 +7,6 @@ from pydantic import BaseModel, Field
 from gemini_model import llm
 import base64
 from langchain_core.messages import HumanMessage
-from google_services import get_gmail_service, get_calendar_service
 from langchain.prompts import PromptTemplate
 import dateparser
 from langchain.output_parsers import PydanticOutputParser
@@ -63,13 +60,12 @@ class MeetingRequest(BaseModel):
 
 # Tool 1: Search Emails
 @tool
-def search_emails(query: str) -> List[Dict]:
+def search_emails(query: str, gmail_service) -> List[Dict]:
     """Searches Gmail for messages matching the query and fetches full body content."""
-    service = get_gmail_service()
+    service = gmail_service
     response = service.users().messages().list(userId='me', q=query, maxResults=5).execute()
     messages = response.get('messages', [])
     results = []
-
     for msg in messages:
         msg_detail = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
         payload = msg_detail.get('payload', {})
@@ -126,18 +122,15 @@ Emails:\n
 
 
 @tool
-def create_calendar_event(event_details:EventDetails, token_pickle_path='token_calendar.pickle'):
-    """Creates a Google Calendar event."""
-    access_token = load_access_token_from_pickle(token_pickle_path)
+def create_calendar_event(event_details: EventDetails, calendar_service) -> str:
+    """Creates a Google Calendar event from structured details."""
+    
+    service = calendar_service
     parsed_datetime_start = dateparser.parse(event_details['start_datetime'], settings={'PREFER_DATES_FROM': 'future'})
     iso_datetime_start = parsed_datetime_start.isoformat() if parsed_datetime_start else None
     parsed_datetime_end = dateparser.parse(event_details['end_datetime'], settings={'PREFER_DATES_FROM': 'future'})
     iso_datetime_end = parsed_datetime_end.isoformat() if parsed_datetime_end else None
-    url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
-    }
+
     event_payload = {
         'summary': event_details['title'],
         'description': event_details['description'],
@@ -151,20 +144,14 @@ def create_calendar_event(event_details:EventDetails, token_pickle_path='token_c
         },
         'attendees': [{'email': email.strip()} for email in event_details.get('attendees', [])]
     }
-    print(f"Creating event with payload: {json.dumps(event_payload, indent=2)}")
-    response = requests.post(url, headers=headers, json=event_payload)
 
-    if response.status_code in (200, 201):
-        event = response.json()
-        return f"Event created: {event.get('htmlLink')}"
-    else:
-        return f"Failed: {response.status_code}\n{response.text}"
-
+    event = service.events().insert(calendarId='primary', body=event_payload).execute()
+    return f"📅 Event created: {event.get('htmlLink')}"
 
 @tool
-def get_upcoming_events(upcoming_event: UpcomingEvent) -> List[Dict]:
+def get_upcoming_events(upcoming_event: UpcomingEvent, calendar_service) -> List[Dict]:
     """Fetches upcoming calendar events in the next N days."""
-    service = get_calendar_service()
+    service = calendar_service
     now = datetime.utcnow().isoformat() + 'Z'
     future = (datetime.utcnow() + timedelta(days=upcoming_event["days_ahead"])).isoformat() + 'Z'
     events_result = service.events().list(
@@ -197,11 +184,10 @@ def get_upcoming_events(upcoming_event: UpcomingEvent) -> List[Dict]:
 
 
 
-# 2. Corrected tool logic using PydanticOutputParser
+
 @tool
 def parse_meeting_request(prompt: str) -> Dict:
     """Parses a meeting request from user input into structured data."""
-    print(f"Parsing meeting request from prompt: '{prompt}'")
 
     # Use PydanticOutputParser and connect it to your model
     parser = PydanticOutputParser(pydantic_object=MeetingRequest)
@@ -252,9 +238,9 @@ USER INPUT:
     }
 
 @tool
-def send_email(email_draft: EmailDraft) -> str:
+def send_email(email_draft: EmailDraft, gmail_service) -> str:
     """Sends an email using Gmail API."""
-    service = get_gmail_service()
+    service = gmail_service
     message = MIMEText(email_draft['body'])
     message['to'] = email_draft['to']
     message['subject'] = email_draft['subject']
