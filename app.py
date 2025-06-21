@@ -15,7 +15,7 @@ import streamlit as st
 import uuid
 from main import build_graph
 
-
+query_params = st.query_params
 
 st.title("💬 Gmail Calendar Assistant")
 
