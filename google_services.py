@@ -9,12 +9,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar"
 ]
 
-
-
 def get_credentials_from_code(code: str) -> Credentials:
-    #credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
-    flow = Flow.from_client_secrets_file(
-        st.secrets["credentials_json"],
+    credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
+    flow = Flow.from_client_config(
+        credentials_dict,
         scopes=SCOPES,
         redirect_uri="https://langgraph-gmail-assistant-y54mh3d6ckwdwya7gfeu2b.streamlit.app/"
     )
@@ -22,9 +20,9 @@ def get_credentials_from_code(code: str) -> Credentials:
     return flow.credentials
 
 def get_auth_url():
-    #credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
-    flow = Flow.from_client_secrets_file(
-        st.secrets["credentials_json"],
+    credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
+    flow = Flow.from_client_config(
+        credentials_dict,
         scopes=SCOPES,
         redirect_uri="https://langgraph-gmail-assistant-y54mh3d6ckwdwya7gfeu2b.streamlit.app/"
     )
