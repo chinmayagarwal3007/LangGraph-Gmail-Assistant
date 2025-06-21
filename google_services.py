@@ -10,12 +10,11 @@ SCOPES = [
 ]
 
 
-CREDENTIALS_PATH = "/tmp/credentials.json"
 
 def get_credentials_from_code(code: str) -> Credentials:
-    credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
+    #credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
     flow = Flow.from_client_secrets_file(
-        credentials_dict,
+        st.secrets["credentials_json"],
         scopes=SCOPES,
         redirect_uri="https://langgraph-gmail-assistant-y54mh3d6ckwdwya7gfeu2b.streamlit.app/"
     )
@@ -23,9 +22,9 @@ def get_credentials_from_code(code: str) -> Credentials:
     return flow.credentials
 
 def get_auth_url():
-    credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
+    #credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
     flow = Flow.from_client_secrets_file(
-        credentials_dict,
+        st.secrets["credentials_json"],
         scopes=SCOPES,
         redirect_uri="https://langgraph-gmail-assistant-y54mh3d6ckwdwya7gfeu2b.streamlit.app/"
     )
