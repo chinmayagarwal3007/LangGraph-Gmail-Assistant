@@ -47,7 +47,7 @@ else:
     tool_node = get_tool_node(gmail_service, calendar_service)
     graph = build_graph(tool_node)
 
-    st.markdown("### ✅ You're connected! Now use your Assistant ✨")
+    st.toast("✅ You're connected! Now use your Assistant ✨", icon="🎉")
 
     # 🧠 LangGraph state + session logic
     if "sessions" not in st.session_state:
