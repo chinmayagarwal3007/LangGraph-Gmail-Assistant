@@ -31,9 +31,8 @@ if st.session_state.credentials is None:
         st.session_state.auth_url = auth_url
         st.markdown(f"[Click here to authorize]({auth_url})")
 
-    code = st.text_input("Paste the full URL after authorization")
-    if "code=" in code:
-        code_val = code.split("code=")[-1].split("&")[0]
+    if "code" in query_params:
+        code_val = query_params["code"]
         creds = get_credentials_from_code(code_val)
         st.session_state.credentials = creds
         st.success("🎉 Successfully authenticated!")
