@@ -36,6 +36,7 @@ if st.session_state.credentials is None:
         creds = get_credentials_from_code(code_val)
         st.session_state.credentials = creds
         st.success("🎉 Successfully authenticated!")
+        st.toast("✅ You're connected! Now use your Assistant ✨", icon="🎉")
         st.rerun()
 
 # ----------------------
@@ -47,7 +48,7 @@ else:
     tool_node = get_tool_node(gmail_service, calendar_service)
     graph = build_graph(tool_node)
 
-    st.toast("✅ You're connected! Now use your Assistant ✨", icon="🎉")
+    
 
     # 🧠 LangGraph state + session logic
     if "sessions" not in st.session_state:
