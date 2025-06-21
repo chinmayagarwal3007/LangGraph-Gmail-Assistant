@@ -1,30 +1,33 @@
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-
+import streamlit as st
+import json
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/calendar"
 ]
 
-TOKEN_PATH = "token.json"  # or per-user token
+
 CREDENTIALS_PATH = "/tmp/credentials.json"
 
 def get_credentials_from_code(code: str) -> Credentials:
+    credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
     flow = Flow.from_client_secrets_file(
-        CREDENTIALS_PATH,
+        credentials_dict,
         scopes=SCOPES,
-        redirect_uri="http://localhost:8501/"
+        redirect_uri="https://langgraph-gmail-assistant-y54mh3d6ckwdwya7gfeu2b.streamlit.app/"
     )
     flow.fetch_token(code=code)
     return flow.credentials
 
 def get_auth_url():
+    credentials_dict = json.loads(st.secrets["google"]["credentials_json"])
     flow = Flow.from_client_secrets_file(
-        CREDENTIALS_PATH,
+        credentials_dict,
         scopes=SCOPES,
-        redirect_uri="http://localhost:8501/"
+        redirect_uri="https://langgraph-gmail-assistant-y54mh3d6ckwdwya7gfeu2b.streamlit.app/"
     )
     auth_url, _ = flow.authorization_url(prompt='consent')
     return auth_url
