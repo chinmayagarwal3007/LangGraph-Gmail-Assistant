@@ -9,7 +9,7 @@ SCOPES = [
 ]
 
 TOKEN_PATH = "token.json"  # or per-user token
-CREDENTIALS_PATH = "credentials.json"
+CREDENTIALS_PATH = "/tmp/credentials.json"
 
 def get_credentials_from_code(code: str) -> Credentials:
     flow = Flow.from_client_secrets_file(
