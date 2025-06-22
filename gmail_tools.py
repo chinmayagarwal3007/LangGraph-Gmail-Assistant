@@ -86,7 +86,7 @@ def search_emails(query: str, gmail_service) -> List[Dict]:
             'id': msg['id'],
             'subject': subject,
             'sender': sender,
-            'body': snippet,
+            'body': body,
             'internalDate': int(msg_detail.get('internalDate', 0))
         })
 
