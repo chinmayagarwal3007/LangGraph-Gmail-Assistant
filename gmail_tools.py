@@ -100,7 +100,7 @@ def search_emails(query: str, gmail_service) -> List[Dict]:
             'sender': msg['sender'],
             'body': msg['body']
         }
-        for msg in sorted_msgs[:2]
+        for msg in sorted_msgs[:6]
     ]
 
 # Tool 2: Summarize Emails
